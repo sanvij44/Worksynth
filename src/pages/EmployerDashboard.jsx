@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Sparkles } from 'lucide-react'
@@ -16,6 +16,7 @@ import {
 import { useTheme } from '../context/ThemeContext'
 import { useApp } from '../context/AppContext'
 import { freelancers } from '../data/index'
+import { supabase } from '../lib/supabase'
 
 const TABS = ['overview', 'projects', 'freelancers', 'escrow', 'analytics']
 
@@ -24,6 +25,49 @@ export default function EmployerDashboard() {
   const { isDark } = useTheme()
   const { toggleAIPanel, logout } = useApp()
   const navigate = useNavigate()
+
+  const [escrowStats, setEscrowStats] = useState({
+    held: 0,
+    releasedThisMonth: 0,
+    pendingApproval: 0,
+  })
+
+  useEffect(() => {
+    const loadEscrowStats = async () => {
+      const { data, error } = await supabase
+        .from('escrow_holds')
+        .select('amount_paise, status, created_at')
+
+      if (error || !data) return
+
+      const now = new Date()
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+
+      let held = 0
+      let releasedThisMonth = 0
+      let pendingApproval = 0
+
+      for (const row of data) {
+        if (row.status === 'funded') {
+          held += row.amount_paise
+          pendingApproval += row.amount_paise
+        }
+        if (row.status === 'released') {
+          if (new Date(row.created_at) >= monthStart) {
+            releasedThisMonth += row.amount_paise
+          }
+        }
+      }
+
+      setEscrowStats({
+        held: held / 100,
+        releasedThisMonth: releasedThisMonth / 100,
+        pendingApproval: pendingApproval / 100,
+      })
+    }
+
+    loadEscrowStats()
+  }, [])
 
   const sidebarLinks = [
     { icon: '⬡', label: 'Overview', onClick: () => setActiveTab('overview') },
@@ -168,13 +212,15 @@ export default function EmployerDashboard() {
                 <h2 className="text-xl font-bold font-display mb-6">Escrow Accounts</h2>
                 <div className="grid md:grid-cols-3 gap-5 mb-6">
                   {[
-                    { label: 'TOTAL HELD', value: '$17,500', color: 'text-amber-400' },
-                    { label: 'RELEASED THIS MONTH', value: '$9,200', color: 'text-emerald-400' },
-                    { label: 'PENDING APPROVAL', value: '$3,200', color: 'text-primary' },
+                    { label: 'TOTAL HELD', value: escrowStats.held, color: 'text-amber-400' },
+                    { label: 'RELEASED THIS MONTH', value: escrowStats.releasedThisMonth, color: 'text-emerald-400' },
+                    { label: 'PENDING APPROVAL', value: escrowStats.pendingApproval, color: 'text-primary' },
                   ].map(e => (
                     <GlassCard key={e.label} className="p-5">
                       <div className={`text-xs mb-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{e.label}</div>
-                      <div className={`text-3xl font-bold font-display ${e.color}`}>{e.value}</div>
+                      <div className={`text-3xl font-bold font-display ${e.color}`}>
+                        ₹{e.value.toLocaleString()}
+                      </div>
                     </GlassCard>
                   ))}
                 </div>

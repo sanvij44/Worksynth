@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext'
 import { useApp } from '../context/AppContext'
 import { projects } from '../data/projects'
 import { createEscrowCheckout } from '../lib/escrow'
+import { supabase } from '../lib/supabase'
 
 export default function ProjectDetail() {
   const { id } = useParams()
@@ -40,6 +41,22 @@ export default function ProjectDetail() {
     })
     setEscrowLoading(false)
     if (result) window.location.href = `${window.location.origin}/project/${id}?escrow=success`
+  }
+
+  const handleReleaseEscrow = async () => {
+    if (!firstPendingMilestone) return
+    try {
+      await supabase
+        .from('escrow_holds')
+        .update({ status: 'released' })
+        .eq('project_id', project.id)
+        .eq('milestone_id', firstPendingMilestone.id)
+        .eq('status', 'funded')
+      // Simple refresh so UI reflects latest status if you hook it up later
+      window.location.reload()
+    } catch (e) {
+      console.error('Failed to release escrow', e)
+    }
   }
 
   const sidebarLinks = [
@@ -108,7 +125,9 @@ export default function ProjectDetail() {
                     <CreditCard size={14} /> {escrowLoading ? 'Opening…' : 'Fund with Razorpay'}
                   </motion.button>
                 )}
-                <GradientButton>Approve Milestone</GradientButton>
+                <GradientButton onClick={handleReleaseEscrow}>
+                  Approve Milestone
+                </GradientButton>
               </div>
             </div>
 

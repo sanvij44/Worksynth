@@ -58,7 +58,19 @@ export async function createEscrowCheckout({
         order_id: orderId,
         name: 'WorkSynth',
         description: `Escrow: Project ${projectId} – Milestone ${milestoneId}`,
-        handler: (response) => {
+        handler: async (response) => {
+          // Store escrow hold in Supabase (fire-and-forget)
+          try {
+            await supabase.from('escrow_holds').insert({
+              project_id: projectId,
+              milestone_id: milestoneId,
+              amount_paise: amount,
+              status: 'funded',
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+            })
+          } catch (_) {}
+
           resolve({
             paymentId: response.razorpay_payment_id,
             orderId: response.razorpay_order_id,
